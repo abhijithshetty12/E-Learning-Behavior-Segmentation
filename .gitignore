@@ -19,7 +19,6 @@ data/raw/
 
 # Large/generated processed files if needed
 data/processed/student_behaviour.csv
-data/processed/student_behaviour_clustered.csv
 
 # OS files
 .DS_Store
