@@ -5,6 +5,7 @@ import mimetypes
 
 import joblib
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 APP_DIR = Path(__file__).resolve().parent
@@ -688,6 +689,26 @@ render_html(
         filter: brightness(1.055);
     }}
 
+    .st-key-outcome_desktop_chart {{
+        display: block;
+    }}
+
+    .st-key-outcome_mobile_chart {{
+        display: none;
+    }}
+
+    .st-key-outcome_desktop_chart [data-testid="stPlotlyChart"],
+    .st-key-outcome_mobile_chart [data-testid="stPlotlyChart"] {{
+        width: 100%;
+        overflow: hidden;
+        border-radius: 24px;
+    }}
+
+    .st-key-outcome_desktop_chart [data-testid="stPlotlyChart"] > div,
+    .st-key-outcome_mobile_chart [data-testid="stPlotlyChart"] > div {{
+        width: 100% !important;
+    }}
+
     [data-testid="stDataFrame"] {{
         overflow: hidden;
         border-radius: 20px;
@@ -862,6 +883,23 @@ render_html(
         [data-testid="stTabs"] button[role="tab"] {{
             padding: .52rem .68rem;
             font-size: .76rem;
+        }}
+
+        .st-key-outcome_desktop_chart {{
+            display: none !important;
+        }}
+
+        .st-key-outcome_mobile_chart {{
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }}
+
+        .st-key-outcome_mobile_chart [data-testid="stPlotlyChart"] {{
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            border-radius: 18px;
         }}
 
         [data-testid="stForm"] {{
@@ -1181,7 +1219,214 @@ with outcomes_tab:
         normalize="index",
     ).mul(100).round(2)
 
-    st.bar_chart(outcome_percentage, height=390)
+    outcome_order = ["Distinction", "Pass", "Fail", "Withdrawn"]
+    outcome_percentage = outcome_percentage.reindex(columns=outcome_order, fill_value=0)
+
+    segment_order = list(outcome_percentage.index)
+
+    display_labels = {
+        "Highly Engaged Consistent Learners": "Highly Engaged<br>Consistent<br>Learners",
+        "Steady Assessment-Engaged Learners": "Steady Assessment-<br>Engaged<br>Learners",
+        "Irregular Late-Submission Learners": "Irregular Late-<br>Submission<br>Learners",
+        "Low-Engagement Inactive Learners": "Low-Engagement<br>Inactive<br>Learners",
+    }
+
+    chart_colors = {
+        "Distinction": "#4F8EF7",
+        "Pass": "#22B983",
+        "Fail": "#E85D75",
+        "Withdrawn": "#E7A63A",
+    }
+
+    fig = go.Figure()
+
+    for outcome in outcome_order:
+        values = outcome_percentage[outcome]
+
+        fig.add_trace(
+            go.Bar(
+                name=outcome,
+                x=[display_labels.get(name, name) for name in segment_order],
+                y=values,
+                text=[f"{value:.1f}%" for value in values],
+                textposition="outside",
+                textfont=dict(size=11),
+                width=0.15,
+                cliponaxis=False,
+                marker=dict(
+                    color=chart_colors[outcome],
+                    line=dict(width=0),
+                ),
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    + outcome
+                    + ": %{y:.2f}%<extra></extra>"
+                ),
+            )
+        )
+
+    fig.update_layout(
+        barmode="group",
+        height=540,
+        autosize=True,
+        margin=dict(l=48, r=24, t=78, b=112),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        hovermode="closest",
+        bargap=0.22,
+        bargroupgap=0.08,
+        uniformtext_minsize=9,
+        uniformtext_mode="show",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.04,
+            xanchor="center",
+            x=0.5,
+            title=None,
+            font=dict(size=11),
+        ),
+        xaxis=dict(
+            title=None,
+            showgrid=False,
+            zeroline=False,
+            automargin=True,
+            tickangle=0,
+            tickfont=dict(size=11),
+            ticklabelstandoff=10,
+            fixedrange=True,
+        ),
+        yaxis=dict(
+            title=dict(
+                text="Share of segment (%)",
+                font=dict(size=11),
+            ),
+            range=[0, 80],
+            dtick=20,
+            showgrid=True,
+            gridcolor="rgba(128,128,128,0.16)",
+            zeroline=False,
+            automargin=True,
+            tickfont=dict(size=10),
+            fixedrange=True,
+        ),
+        font=dict(
+            family='-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif',
+            size=12,
+        ),
+        hoverlabel=dict(
+            font_size=12,
+            font_family='-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif',
+        ),
+    )
+
+    with st.container(key="outcome_desktop_chart"):
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            theme="streamlit",
+            config={
+                "displayModeBar": False,
+                "displaylogo": False,
+                "responsive": True,
+                "scrollZoom": False,
+                "doubleClick": False,
+            },
+        )
+
+    mobile_segment_labels = {
+        "Highly Engaged Consistent Learners": "Highly Engaged Consistent<br>Learners",
+        "Steady Assessment-Engaged Learners": "Steady Assessment-Engaged<br>Learners",
+        "Irregular Late-Submission Learners": "Irregular Late-Submission<br>Learners",
+        "Low-Engagement Inactive Learners": "Low-Engagement Inactive<br>Learners",
+    }
+
+    mobile_fig = go.Figure()
+
+    mobile_domains = [
+        (0.735, 0.875),
+        (0.505, 0.645),
+        (0.275, 0.415),
+        (0.045, 0.185),
+    ]
+
+    mobile_title_positions = [0.915, 0.685, 0.455, 0.225]
+
+    for index, segment_name in enumerate(segment_order):
+        values = [float(outcome_percentage.loc[segment_name, outcome]) for outcome in outcome_order]
+        y0, y1 = mobile_domains[index]
+
+        mobile_fig.add_trace(
+            go.Pie(
+                labels=outcome_order,
+                values=values,
+                hole=0.58,
+                sort=False,
+                direction="clockwise",
+                marker=dict(
+                    colors=[chart_colors[outcome] for outcome in outcome_order],
+                    line=dict(color="rgba(255,255,255,0.10)", width=1),
+                ),
+                textinfo="percent",
+                textposition="inside",
+                textfont=dict(size=11),
+                hovertemplate="<b>%{label}</b><br>%{value:.2f}%<extra></extra>",
+                domain=dict(x=[0.16, 0.84], y=[y0, y1]),
+                showlegend=index == 0,
+                name=segment_name,
+            )
+        )
+
+        mobile_fig.add_annotation(
+            x=0.5,
+            y=mobile_title_positions[index],
+            xref="paper",
+            yref="paper",
+            text=f"<b>{mobile_segment_labels.get(segment_name, segment_name)}</b>",
+            showarrow=False,
+            align="center",
+            xanchor="center",
+            yanchor="middle",
+            font=dict(size=12),
+        )
+
+    mobile_fig.update_layout(
+        height=1260,
+        margin=dict(l=6, r=6, t=96, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.015,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=10),
+            traceorder="normal",
+        ),
+        font=dict(
+            family='-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif',
+            size=11,
+        ),
+        hoverlabel=dict(
+            font_size=12,
+            font_family='-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif',
+        ),
+    )
+
+    with st.container(key="outcome_mobile_chart"):
+        st.plotly_chart(
+            mobile_fig,
+            use_container_width=True,
+            theme="streamlit",
+            config={
+                "displayModeBar": False,
+                "displaylogo": False,
+                "responsive": True,
+                "scrollZoom": False,
+                "doubleClick": False,
+            },
+        )
 
     render_html("<div style='height:.45rem'></div>")
 

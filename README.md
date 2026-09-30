@@ -202,6 +202,14 @@ E-Learning-Behavior-Segmentation/
 │   ├── 02_feature_engineering.ipynb
 │   └── 03_kmodes_clustering.ipynb
 │
+├── screenshots/
+│   ├── dashboard.png
+│   ├── overview.png
+│   ├── segments.png
+│   ├── outcomes.png
+│   ├── prediction.png
+│   └── about.png
+│
 ├── src/
 │   ├── preprocess.py
 │   ├── feature_engineering.py
@@ -215,17 +223,27 @@ E-Learning-Behavior-Segmentation/
 
 ## 🖼️ Interface Preview
 
-### Dashboard Overview
+### Main Dashboard
 
-| **Behavioral Segment Distribution** | **Segment Explorer** |
+<p align="center">
+  <img src="/screenshots/dashboard.png" alt="Main Dashboard" width="100%" />
+</p>
+
+### Dashboard Sections
+
+| **Overview** | **Behavioral Segments** |
 | :---: | :---: |
-| <img src="/screenshots/dashboard.png" /> | <img src="/screenshots/segment-explorer.png" /> |
+| <img src="/screenshots/overview.png" alt="Overview" /> | <img src="/screenshots/segments.png" alt="Behavioral Segments" /> |
 
-### Analytics & Prediction
-
-| **Academic Outcome Analysis** | **Student Segment Prediction** |
+| **Academic Outcomes** | **Student Segment Prediction** |
 | :---: | :---: |
-| <img src="/screenshots/outcome-analysis.png" /> | <img src="/screenshots/prediction.png" /> |
+| <img src="/screenshots/outcomes.png" alt="Academic Outcomes" /> | <img src="/screenshots/prediction.png" alt="Student Segment Prediction" /> |
+
+### About & Methodology
+
+<p align="center">
+  <img src="/screenshots/about.png" alt="About and Methodology" width="100%" />
+</p>
 
 ---
 
