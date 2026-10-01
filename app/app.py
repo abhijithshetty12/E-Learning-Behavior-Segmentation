@@ -46,18 +46,73 @@ def image_data_uri(path):
 def render_html(content):
     st.html(content)
 
+def stop_with_startup_error(message, detail):
+    st.error(message)
+    st.caption("Verify the processed dataset, saved model, metadata file and installed dependencies, then rerun the app.")
+    with st.expander("Technical details"):
+        st.code(detail)
+    st.stop()
+
+required_files = {
+    "Processed dataset": DATA_PATH,
+    "K-Modes model": MODEL_PATH,
+    "Model metadata": METADATA_PATH,
+}
+missing_files = [f"{label}: {path}" for label, path in required_files.items() if not path.exists()]
+if missing_files:
+    stop_with_startup_error(
+        "The dashboard cannot start because one or more required project files are missing.",
+        "\n".join(missing_files),
+    )
+
 try:
     df = load_data()
     model = load_model()
     metadata = load_metadata()
-except FileNotFoundError as error:
-    st.error("Required project files were not found.")
-    st.code(str(error))
-    st.stop()
+except Exception as error:
+    stop_with_startup_error(
+        "The dashboard could not load the project data or trained model.",
+        f"{type(error).__name__}: {error}",
+    )
 
-BEHAVIOUR_FEATURES = metadata["features"]
-CLUSTER_NAMES = {int(key): value for key, value in metadata["cluster_names"].items()}
-N_CLUSTERS = int(metadata["n_clusters"])
+try:
+    if not isinstance(metadata, dict):
+        raise ValueError("model_metadata.pkl must contain a dictionary.")
+
+    required_metadata = {"features", "cluster_names", "n_clusters"}
+    missing_metadata = required_metadata.difference(metadata)
+    if missing_metadata:
+        raise ValueError(f"Metadata is missing: {', '.join(sorted(missing_metadata))}")
+
+    BEHAVIOUR_FEATURES = list(metadata["features"])
+    CLUSTER_NAMES = {int(key): str(value) for key, value in metadata["cluster_names"].items()}
+    N_CLUSTERS = int(metadata["n_clusters"])
+
+    required_columns = {
+        "id_student",
+        "code_module",
+        "Cluster",
+        "Cluster_Name",
+        "final_result",
+        *BEHAVIOUR_FEATURES,
+    }
+    missing_columns = required_columns.difference(df.columns)
+    if missing_columns:
+        raise ValueError(f"Processed dataset is missing columns: {', '.join(sorted(missing_columns))}")
+
+    if df.empty:
+        raise ValueError("Processed dataset contains no rows.")
+
+    if not hasattr(model, "predict") or not hasattr(model, "cluster_centroids_"):
+        raise ValueError("The saved model does not expose the expected K-Modes prediction attributes.")
+
+    if len(model.cluster_centroids_[0]) != len(BEHAVIOUR_FEATURES):
+        raise ValueError("The saved model feature count does not match the metadata.")
+except Exception as error:
+    stop_with_startup_error(
+        "The project files loaded, but their structure is not compatible with this dashboard.",
+        f"{type(error).__name__}: {error}",
+    )
 
 SEGMENT_META = {
     "Highly Engaged Consistent Learners": {
@@ -111,6 +166,25 @@ FEATURE_OPTIONS = {
     "Submission_Behaviour": ["Early", "On-Time", "Late", "No Submission Data"],
     "Inactivity_Pattern": ["Low Inactivity", "Moderate Inactivity", "High Inactivity"],
 }
+
+FEATURE_HELP = {
+    "Activity_Level": "Overall level of interaction with the learning platform after raw activity logs are aggregated.",
+    "Learning_Frequency": "How often the learner interacts with the platform. Frequent indicates regular repeated activity; Rare indicates sparse activity.",
+    "Learning_Consistency": "Regularity of learning activity over time. Moderately Regular represents a middle pattern between sporadic and consistently regular engagement.",
+    "Content_Preference": "The dominant type of learning resource or activity used by the learner.",
+    "Resource_Diversity": "Breadth of different learning-resource types used. Diverse indicates engagement with a wider mix of resources.",
+    "Assessment_Engagement": "Relative level of participation in assessment-related activity after feature engineering.",
+    "Submission_Behaviour": "Typical timing of assessment submissions relative to deadlines.",
+    "Inactivity_Pattern": "Extent of gaps in learning activity. High Inactivity indicates larger or more frequent inactive periods.",
+}
+
+EVALUATION_RESULTS = pd.DataFrame(
+    {
+        "K": [2, 3, 4, 5, 6, 7, 8],
+        "Cost": [92168, 72718, 66527, 64530, 60005, 57686, 56547],
+        "Silhouette Score": [0.346188, 0.355644, 0.311718, 0.275117, 0.231912, 0.217296, 0.194441],
+    }
+)
 
 render_html(
     f"""
@@ -429,6 +503,127 @@ render_html(
     .glass-card {{
         padding: 1.05rem;
         border-radius: 27px;
+    }}
+
+    .info-callout {{
+        padding: 1rem 1.05rem;
+        border-radius: 22px;
+        background: linear-gradient(145deg, color-mix(in srgb, currentColor 5%, transparent), color-mix(in srgb, currentColor 2.5%, transparent));
+        border: 1px solid color-mix(in srgb, currentColor 9%, transparent);
+        box-shadow: 0 16px 42px rgba(0, 0, 0, .08);
+        color: inherit;
+    }}
+
+    .info-callout-title {{
+        margin-bottom: .34rem;
+        font-size: .79rem;
+        font-weight: 760;
+        letter-spacing: .02em;
+        color: #007AFF;
+    }}
+
+    .info-callout-copy {{
+        margin: 0;
+        font-size: .84rem;
+        line-height: 1.55;
+        opacity: .68;
+    }}
+
+    .insight-grid {{
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .66rem;
+        margin: .82rem 0 .35rem;
+    }}
+
+    .insight-card {{
+        padding: .9rem;
+        border-radius: 20px;
+        background: color-mix(in srgb, currentColor 3.5%, transparent);
+        border: 1px solid color-mix(in srgb, currentColor 7%, transparent);
+        color: inherit;
+    }}
+
+    .insight-label {{
+        margin-bottom: .38rem;
+        font-size: .68rem;
+        font-weight: 720;
+        text-transform: uppercase;
+        letter-spacing: .065em;
+        opacity: .44;
+    }}
+
+    .insight-value {{
+        font-size: .88rem;
+        font-weight: 680;
+        line-height: 1.38;
+    }}
+
+    .insight-meta {{
+        margin-top: .28rem;
+        font-size: .72rem;
+        opacity: .56;
+    }}
+
+    .flow-strip {{
+        display: flex;
+        align-items: stretch;
+        gap: .48rem;
+        overflow-x: auto;
+        padding: .18rem .08rem .42rem;
+        scrollbar-width: thin;
+    }}
+
+    .flow-step {{
+        min-width: 132px;
+        flex: 1 0 132px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 78px;
+        padding: .75rem;
+        border-radius: 18px;
+        background: color-mix(in srgb, currentColor 3.5%, transparent);
+        border: 1px solid color-mix(in srgb, currentColor 7%, transparent);
+        text-align: center;
+        font-size: .76rem;
+        font-weight: 660;
+        line-height: 1.3;
+    }}
+
+    .flow-arrow {{
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        font-size: 1rem;
+        opacity: .34;
+    }}
+
+    .dataset-summary-flow {{
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .62rem;
+    }}
+
+    .dataset-summary-item {{
+        min-height: 100px;
+        padding: .9rem;
+        border-radius: 20px;
+        background: color-mix(in srgb, currentColor 3.5%, transparent);
+        border: 1px solid color-mix(in srgb, currentColor 7%, transparent);
+    }}
+
+    .dataset-summary-value {{
+        font-size: 1.25rem;
+        font-weight: 760;
+        letter-spacing: -.035em;
+    }}
+
+    .dataset-summary-label {{
+        margin-top: .38rem;
+        font-size: .72rem;
+        line-height: 1.35;
+        opacity: .56;
     }}
 
     .distribution-stack {{
@@ -849,6 +1044,31 @@ render_html(
             gap: .5rem;
         }}
 
+        .insight-grid {{
+            grid-template-columns: 1fr;
+        }}
+
+        .dataset-summary-flow {{
+            grid-template-columns: 1fr 1fr;
+        }}
+
+        .flow-strip {{
+            flex-direction: column;
+            overflow: visible;
+        }}
+
+        .flow-step {{
+            width: 100%;
+            min-width: 0;
+            min-height: 64px;
+            flex-basis: auto;
+        }}
+
+        .flow-arrow {{
+            transform: rotate(90deg);
+            height: 18px;
+        }}
+
         .profile-item {{
             min-height: 80px;
             padding: .72rem;
@@ -1043,6 +1263,10 @@ cluster_distribution["Percentage"] = (
     cluster_distribution["Students"] / cluster_distribution["Students"].sum() * 100
 ).round(2)
 
+segment_share_map = dict(
+    zip(cluster_distribution["Behavioral Segment"], cluster_distribution["Percentage"])
+)
+
 with overview_tab:
     render_html(
         """
@@ -1135,6 +1359,102 @@ with overview_tab:
             """,
         )
 
+    render_html(
+        """
+        <div class="section-head" style="margin-top:1.45rem;">
+            <div class="section-kicker">Model evaluation</div>
+            <h3 class="section-title" style="font-size:1.55rem;">Choosing the number of clusters</h3>
+            <p class="section-copy">K was evaluated from 2 to 8 using K-Modes cost and Hamming-distance silhouette score, then balanced against cluster size and behavioral interpretability.</p>
+        </div>
+        """,
+    )
+
+    evaluation_left, evaluation_right = st.columns(2)
+
+    with evaluation_left:
+        cost_fig = go.Figure()
+        cost_fig.add_trace(
+            go.Scatter(
+                x=EVALUATION_RESULTS["K"],
+                y=EVALUATION_RESULTS["Cost"],
+                mode="lines+markers",
+                line=dict(color="#4F8EF7", width=3),
+                marker=dict(size=8, color="#4F8EF7"),
+                hovertemplate="K=%{x}<br>Cost=%{y:,.0f}<extra></extra>",
+                name="Cost",
+            )
+        )
+        cost_fig.add_trace(
+            go.Scatter(
+                x=[4],
+                y=[66527],
+                mode="markers",
+                marker=dict(size=14, color="#BF5AF2", line=dict(width=2, color="white")),
+                hovertemplate="Selected K=4<br>Cost=66,527<extra></extra>",
+                name="Selected K",
+            )
+        )
+        cost_fig.update_layout(
+            height=300,
+            margin=dict(l=42, r=18, t=44, b=42),
+            title=dict(text="K-Modes cost", font=dict(size=15)),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=False,
+            xaxis=dict(title="K", dtick=1, fixedrange=True, gridcolor="rgba(128,128,128,.12)"),
+            yaxis=dict(title="Cost", fixedrange=True, gridcolor="rgba(128,128,128,.12)"),
+        )
+        st.plotly_chart(cost_fig, use_container_width=True, config={"displayModeBar": False, "displaylogo": False})
+
+    with evaluation_right:
+        silhouette_fig = go.Figure()
+        silhouette_fig.add_trace(
+            go.Scatter(
+                x=EVALUATION_RESULTS["K"],
+                y=EVALUATION_RESULTS["Silhouette Score"],
+                mode="lines+markers",
+                line=dict(color="#22B983", width=3),
+                marker=dict(size=8, color="#22B983"),
+                hovertemplate="K=%{x}<br>Silhouette=%{y:.4f}<extra></extra>",
+                name="Silhouette",
+            )
+        )
+        silhouette_fig.add_trace(
+            go.Scatter(
+                x=[3, 4],
+                y=[0.355644, 0.311718],
+                mode="markers",
+                marker=dict(size=[14, 14], color=["#30D158", "#BF5AF2"], line=dict(width=2, color="white")),
+                hovertemplate="K=%{x}<br>Silhouette=%{y:.4f}<extra></extra>",
+                name="Key values",
+            )
+        )
+        silhouette_fig.update_layout(
+            height=300,
+            margin=dict(l=42, r=18, t=44, b=42),
+            title=dict(text="Hamming silhouette score", font=dict(size=15)),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=False,
+            xaxis=dict(title="K", dtick=1, fixedrange=True, gridcolor="rgba(128,128,128,.12)"),
+            yaxis=dict(title="Score", fixedrange=True, gridcolor="rgba(128,128,128,.12)"),
+        )
+        st.plotly_chart(silhouette_fig, use_container_width=True, config={"displayModeBar": False, "displaylogo": False})
+
+    render_html(
+        """
+        <div class="info-callout">
+            <div class="info-callout-title">Why K = 4 was selected</div>
+            <p class="info-callout-copy">K = 3 achieved the highest silhouette score at 0.3556, while K = 4 scored 0.3117 with a cost of 66,527. The final choice used more than one metric: K = 4 retained substantial cluster sizes, produced four interpretable behavioral archetypes and sat near the point where further cost reductions became smaller. The selection therefore balances quantitative separation with practical interpretability.</p>
+        </div>
+        """,
+    )
+
+    render_html("<div style='height:.65rem'></div>")
+    evaluation_display = EVALUATION_RESULTS.copy()
+    evaluation_display["Silhouette Score"] = evaluation_display["Silhouette Score"].round(4)
+    st.dataframe(evaluation_display, hide_index=True, use_container_width=True)
+
 with segments_tab:
     render_html(
         """
@@ -1150,11 +1470,13 @@ with segments_tab:
     selected_segment = st.selectbox(
         "Behavioral segment",
         segment_names,
+        format_func=lambda name: f"{name} · {segment_share_map.get(name, 0):.2f}%",
         label_visibility="collapsed",
     )
 
     segment_data = df[df["Cluster_Name"] == selected_segment]
     cluster_id = int(segment_data["Cluster"].iloc[0])
+    segment_share = float(segment_share_map.get(selected_segment, len(segment_data) / total_profiles * 100))
     meta = SEGMENT_META.get(selected_segment, {})
     segment_icon = meta.get("icon", "✦")
     segment_accent = meta.get("accent", "#64D2FF")
@@ -1170,7 +1492,7 @@ with segments_tab:
         <div class="segment-hero">
             <div class="segment-topline">
                 <div class="segment-icon" style="background:linear-gradient(145deg,{segment_accent}2A,{segment_accent_2}22);color:{segment_accent};">{segment_icon}</div>
-                <div class="segment-chip">Cluster {cluster_id} · {len(segment_data):,} profiles</div>
+                <div class="segment-chip">Cluster {cluster_id} · {len(segment_data):,} profiles · {segment_share:.2f}%</div>
             </div>
             <div class="segment-title">{escape(selected_segment)}</div>
             <div class="section-kicker" style="color:{segment_accent};margin-bottom:.45rem;">{escape(segment_eyebrow)}</div>
@@ -1212,6 +1534,17 @@ with outcomes_tab:
         </div>
         """,
     )
+
+    render_html(
+        """
+        <div class="info-callout">
+            <div class="info-callout-title">Important interpretation</div>
+            <p class="info-callout-copy"><code>final_result</code> was deliberately excluded from clustering and is used only after the behavioral segments are formed. Differences in Pass, Fail, Distinction and Withdrawn rates are therefore external associations with the discovered behavior patterns, not evidence that a segment causes an academic outcome.</p>
+        </div>
+        """,
+    )
+
+    render_html("<div style='height:.8rem'></div>")
 
     outcome_percentage = pd.crosstab(
         df["Cluster_Name"],
@@ -1428,6 +1761,37 @@ with outcomes_tab:
             },
         )
 
+    distinction_segment = outcome_percentage["Distinction"].idxmax()
+    pass_segment = outcome_percentage["Pass"].idxmax()
+    withdrawn_segment = outcome_percentage["Withdrawn"].idxmax()
+
+    render_html(
+        f"""
+        <div class="section-head" style="margin-top:.9rem;">
+            <div class="section-kicker">Observed patterns</div>
+            <h3 class="section-title" style="font-size:1.35rem;">What the outcomes show</h3>
+            <p class="section-copy">These are descriptive observations from the post-clustering outcome comparison and should not be interpreted causally.</p>
+        </div>
+        <div class="insight-grid">
+            <div class="insight-card">
+                <div class="insight-label">Highest distinction share</div>
+                <div class="insight-value">{escape(str(distinction_segment))}</div>
+                <div class="insight-meta">{outcome_percentage.loc[distinction_segment, "Distinction"]:.2f}% Distinction</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-label">Highest pass share</div>
+                <div class="insight-value">{escape(str(pass_segment))}</div>
+                <div class="insight-meta">{outcome_percentage.loc[pass_segment, "Pass"]:.2f}% Pass</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-label">Highest withdrawal share</div>
+                <div class="insight-value">{escape(str(withdrawn_segment))}</div>
+                <div class="insight-meta">{outcome_percentage.loc[withdrawn_segment, "Withdrawn"]:.2f}% Withdrawn</div>
+            </div>
+        </div>
+        """,
+    )
+
     render_html("<div style='height:.45rem'></div>")
 
     st.dataframe(
@@ -1451,6 +1815,7 @@ with outcomes_tab:
     outcome_segment = st.selectbox(
         "Outcome segment",
         sorted(df["Cluster_Name"].dropna().unique()),
+        format_func=lambda name: f"{name} · {segment_share_map.get(name, 0):.2f}%",
         key="outcome_segment",
         label_visibility="collapsed",
     )
@@ -1477,10 +1842,16 @@ with predict_tab:
         <div class="section-head">
             <div class="section-kicker">Live inference</div>
             <h2 class="section-title">Predict a behavioral segment</h2>
-            <p class="section-copy">Enter an engineered categorical student profile. The saved K-Modes model assigns it to the closest learned behavioral segment.</p>
+            <p class="section-copy">This demo accepts the eight categorical behavioral features produced after feature engineering. It does not accept raw click counts, timestamps or raw assessment records.</p>
+        </div>
+        <div class="info-callout">
+            <div class="info-callout-title">What this prediction means</div>
+            <p class="info-callout-copy">Choose an already engineered behavioral profile below. The saved K-Modes model assigns that profile to one of the four learned behavioral segments. The output is segment membership only; it does not predict Pass, Fail, Distinction, marks or Withdrawal.</p>
         </div>
         """,
     )
+
+    render_html("<div style='height:.8rem'></div>")
 
     with st.form("student_prediction_form"):
         left_col, right_col = st.columns(2)
@@ -1493,6 +1864,7 @@ with predict_tab:
                     FEATURE_LABELS.get(feature, feature),
                     FEATURE_OPTIONS[feature],
                     key=f"predict_{feature}",
+                    help=FEATURE_HELP.get(feature),
                 )
 
         submitted = st.form_submit_button(
@@ -1585,6 +1957,64 @@ with about_tab:
         """,
     )
 
+    render_html(
+        f"""
+        <div class="section-head" style="margin-top:1.25rem;">
+            <div class="section-kicker">Dataset transformation</div>
+            <h3 class="section-title" style="font-size:1.35rem;">From raw activity to behavioral segments</h3>
+        </div>
+        <div class="glass-card">
+            <div class="dataset-summary-flow">
+                <div class="dataset-summary-item">
+                    <div class="dataset-summary-value">≈10.9M</div>
+                    <div class="dataset-summary-label">Raw OULAD records across interaction, assessment and student datasets</div>
+                </div>
+                <div class="dataset-summary-item">
+                    <div class="dataset-summary-value">{total_profiles:,}</div>
+                    <div class="dataset-summary-label">Student-course behavioral profiles after preprocessing and aggregation</div>
+                </div>
+                <div class="dataset-summary-item">
+                    <div class="dataset-summary-value">{len(BEHAVIOUR_FEATURES)}</div>
+                    <div class="dataset-summary-label">Categorical behavioral features used by the clustering model</div>
+                </div>
+                <div class="dataset-summary-item">
+                    <div class="dataset-summary-value">{N_CLUSTERS}</div>
+                    <div class="dataset-summary-label">Final interpretable behavioral segments</div>
+                </div>
+            </div>
+        </div>
+        """,
+    )
+
+    render_html(
+        """
+        <div class="section-head" style="margin-top:1.25rem;">
+            <div class="section-kicker">ML workflow</div>
+            <h3 class="section-title" style="font-size:1.35rem;">End-to-end pipeline</h3>
+        </div>
+        <div class="glass-card">
+            <div class="flow-strip">
+                <div class="flow-step">OULAD</div><div class="flow-arrow">→</div>
+                <div class="flow-step">Preprocessing</div><div class="flow-arrow">→</div>
+                <div class="flow-step">Behavioral Feature Engineering</div><div class="flow-arrow">→</div>
+                <div class="flow-step">K-Modes</div><div class="flow-arrow">→</div>
+                <div class="flow-step">4 Segments</div><div class="flow-arrow">→</div>
+                <div class="flow-step">External Outcome Validation</div><div class="flow-arrow">→</div>
+                <div class="flow-step">Dashboard</div>
+            </div>
+        </div>
+        """,
+    )
+
+    render_html(
+        """
+        <div class="info-callout" style="margin-top:.9rem;">
+            <div class="info-callout-title">Why K-Modes?</div>
+            <p class="info-callout-copy">K-Modes was selected because all final clustering features are categorical. Unlike K-Means, which relies on numerical centroids and Euclidean distance, K-Modes represents clusters using categorical modes and matching-based dissimilarity.</p>
+        </div>
+        """,
+    )
+
     render_html("<div style='height:.9rem'></div>")
 
     with st.expander("Behavioral features", expanded=True):
@@ -1604,6 +2034,18 @@ with about_tab:
     with st.expander("Outcome interpretation"):
         st.markdown(
             "`final_result` is intentionally excluded from clustering. Pass, Fail, Distinction and Withdrawn are used only after clustering as external validation. This keeps the segmentation behavior-driven rather than outcome-driven."
+        )
+
+
+    with st.expander("Limitations"):
+        st.markdown(
+            """
+- Behavioral signals are discretized into categorical levels, which simplifies continuous activity patterns.
+- The learned segments are based on OULAD and may not transfer directly to every institution, LMS or learner population.
+- Academic outcomes are used only for post-clustering comparison, so the dashboard does not make causal claims.
+- Live prediction requires the eight engineered categorical features rather than raw clickstream or assessment records.
+- The current application is an offline analytical prototype and is not connected to a real-time Learning Management System.
+            """
         )
 
 render_html(

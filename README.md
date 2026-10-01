@@ -164,7 +164,7 @@ These results show a strong association between learning behavior and academic o
 | **Data Processing** | Pandas, NumPy |
 | **Machine Learning** | K-Modes |
 | **Evaluation** | Scikit-learn |
-| **Visualization** | Matplotlib, Streamlit |
+| **Visualization** | Plotly, Matplotlib, Streamlit |
 | **Development** | Jupyter Notebook, VS Code |
 | **Model Persistence** | Joblib |
 | **Dataset** | OULAD |
@@ -320,6 +320,16 @@ Performs K-Modes clustering, evaluates different values of K, interprets the res
 The main objective of this project is to demonstrate how unsupervised machine learning can be used to identify distinct student learning behaviors from e-learning interaction data.
 
 Rather than predicting marks or directly classifying students as Pass or Fail, the system focuses on discovering **behavioral patterns** that can help educators better understand different types of learners and identify groups that may require additional academic support.
+
+---
+
+## ⚠️ Limitations
+
+* The final behavioral signals are discretized into categorical levels, which simplifies some continuous interaction patterns.
+* The learned segments are derived from **OULAD** and may not transfer directly to every institution, LMS, course structure, or learner population.
+* Academic outcomes are used only for post-clustering analysis; the observed relationships represent **association, not causation**.
+* Live prediction expects the **8 engineered categorical behavioral features** rather than raw clickstream, timestamp, or assessment records.
+* The current application is an offline analytical prototype and is not connected to a real-time Learning Management System.
 
 ---
 
